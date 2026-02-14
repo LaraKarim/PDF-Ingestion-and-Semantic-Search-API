@@ -24,3 +24,5 @@ Thumbs.db
 myenv/
 venv/
 .env/
+
+chroma_db/
