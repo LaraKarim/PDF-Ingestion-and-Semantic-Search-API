@@ -1,13 +1,22 @@
 import pdfplumber
 from fastapi import HTTPException
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from app.core.config import CHUNK_SIZE, CHUNK_OVERLAP
 import asyncio
 
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=CHUNK_SIZE,
-    chunk_overlap=CHUNK_OVERLAP
-)
+def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, chunk_overlap: int = CHUNK_OVERLAP):
+    """
+    Simple text splitter that splits text into overlapping chunks.
+    """
+    chunks = []
+    start = 0
+    text_length = len(text)
+
+    while start < text_length:
+        end = min(start + chunk_size, text_length)
+        chunks.append(text[start:end])
+        start += chunk_size - chunk_overlap if chunk_size > chunk_overlap else chunk_size
+
+    return chunks
 
 
 def _process_pdf_sync(file_obj):
@@ -29,7 +38,7 @@ def _process_pdf_sync(file_obj):
         if not all_text.strip():
             raise HTTPException(status_code=400, detail="PDF contains no readable text.")
 
-        chunks = text_splitter.split_text(all_text)
+        chunks = chunk_text(all_text)
 
         return [
             {"chunk_id": i, "text": c}

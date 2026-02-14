@@ -2,8 +2,8 @@ fastapi
 uvicorn
 sentence-transformers
 chromadb
-langchain
 pdfplumber
 numpy
 requests
 pytest
+python-multipart
