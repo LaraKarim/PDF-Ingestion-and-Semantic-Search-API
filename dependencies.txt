@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 sentence-transformers
+chromadb
 langchain
 pdfplumber
 numpy
