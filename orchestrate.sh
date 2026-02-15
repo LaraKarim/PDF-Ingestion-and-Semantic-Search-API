@@ -45,10 +45,21 @@ case "$action" in
     echo "Container status:"
     docker compose ps
     echo ""
-    echo "To view logs: docker compose logs -f app"
     echo "To stop:      $0 --action terminate"
     echo ""
-    read -p "Press Enter to return to the prompt (containers keep running)..."
+    echo "Waiting for API to be ready..."
+    until curl -s http://localhost:8000/ingest/ > /dev/null 2>&1; do
+        echo -n "."
+        sleep 2
+    done
+    echo ""
+    echo "API is ready!"
+    echo ""
+     # Show logs and allow user to exit with Ctrl+C
+    echo "===== Showing application logs (Ctrl+C to exit) , Open a new terminal for prompts (containers keep running)====="
+    docker compose logs -f app
+    
+
     ;;
   terminate)
     echo "Stopping and removing containers, volumes, and networks..."
