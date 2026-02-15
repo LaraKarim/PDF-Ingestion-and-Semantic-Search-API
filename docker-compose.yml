@@ -1,0 +1,31 @@
+services:
+  db:
+    image: chromadb/chroma:latest
+    environment:
+      - IS_PERSISTENT=TRUE
+    volumes:
+      - chroma_data:/data
+    ports:
+      - "8001:8000"
+    healthcheck:
+      # Chroma image may not have Python/curl; use bash TCP check on port 8000
+      test: ["CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/localhost/8000"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - CHROMA_HOST=db
+      - CHROMA_PORT=8000
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  chroma_data:
+    driver: local

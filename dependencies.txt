@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sentence-transformers
+chromadb
+pdfplumber
+numpy
+requests
+pytest
+python-multipart

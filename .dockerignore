@@ -1,0 +1,28 @@
+# Git and IDE
+.git
+.gitignore
+.vscode
+
+
+# Local ChromaDB data (not used in container)
+chroma_db/
+
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+.eggs
+.pytest_cache
+.coverage
+htmlcov
+venv
+.venv
+env
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Scripts (not needed inside image)
+orchestrate.sh
