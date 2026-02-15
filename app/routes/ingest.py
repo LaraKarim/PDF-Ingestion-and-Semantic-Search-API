@@ -51,37 +51,43 @@ async def handle_file(name: str, file_obj):
 
 @router.post("/")
 async def ingest(
-    input: Optional[List[UploadFile]] = File(None),
-    input_path: Optional[str] = Form(None)
+    # Combined input: can be one file, multiple files, or a string path
+    input: List[UploadFile] = File(None),
+    path_override: Optional[str] = Form(None) 
 ):
-    if not input and not input_path:
-        raise HTTPException(status_code=400, detail="No input provided.")
-
+    # Determine if we received files or a path
+    # If the user sends a string in 'input', it may arrive in 'path_override' 
+    # depending on how the client (like Postman/cURL) formats the request.
+    
+    target_path = path_override
     tasks = []
 
-    # ---------- files ----------
+    # Case 1 & 2: Single or Multiple PDF Files
     if input:
         for f in input:
-            # f.file is a SpooledTemporaryFile, safe to pass
-            tasks.append(handle_file(f.filename, f.file))
+            if f.filename and f.filename.lower().endswith(".pdf"):
+                tasks.append(handle_file(f.filename, f.file))
+            elif f.filename:
+                logger.warning(f"Skipping non-PDF file: {f.filename}")
 
-    # ---------- directory ----------
-    if input_path:
-        if not os.path.isdir(input_path):
+    # Case 3: Directory Path
+    if target_path:
+        if not os.path.isdir(target_path):
             raise HTTPException(status_code=400, detail="Invalid directory path.")
 
-        for name in os.listdir(input_path):
+        for name in os.listdir(target_path):
             if name.lower().endswith(".pdf"):
-                path = os.path.join(input_path, name)
-                # Wrap in async to avoid blocking event loop
-                tasks.append(
-                    asyncio.to_thread(handle_file, name, open(path, "rb"))
-                )
+                path = os.path.join(target_path, name)
+                # Open file and add to tasks
+                tasks.append(handle_file(name, open(path, "rb")))
 
     if not tasks:
-        raise HTTPException(status_code=400, detail="No valid PDFs found.")
+        raise HTTPException(
+            status_code=400, 
+            detail="No valid PDF input provided (check file extensions or path)."
+        )
 
-    # Run all tasks concurrently with proper exception handling
+    # Execute tasks concurrently
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     processed_files = []

@@ -1,22 +1,32 @@
 import chromadb
 import logging
 from typing import List, Dict
-from app.core.config import TOP_K, CHROMA_DB_PATH, CHROMA_COLLECTION_NAME
+from app.core.config import (
+    TOP_K,
+    CHROMA_DB_PATH,
+    CHROMA_COLLECTION_NAME,
+    CHROMA_HOST,
+    CHROMA_PORT,
+)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__) #to tell me which part is talking
 
-# Initialize ChromaDB client
+# Initialize ChromaDB client (lazy singleton)
 _client = None
 _collection = None
 
 
 def _get_client():
-    """Initialize and return ChromaDB persistent client."""
+    """Initialize and return ChromaDB client: HttpClient if CHROMA_HOST/PORT set, else PersistentClient."""
     global _client
     if _client is None:
         try:
-            _client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-            logger.info(f"Initialized ChromaDB client with path: {CHROMA_DB_PATH}")
+            if CHROMA_HOST and CHROMA_PORT:
+                _client = chromadb.HttpClient(host=CHROMA_HOST, port=int(CHROMA_PORT))
+                logger.info(f"Initialized ChromaDB HttpClient: {CHROMA_HOST}:{CHROMA_PORT}")
+            else:
+                _client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+                logger.info(f"Initialized ChromaDB PersistentClient with path: {CHROMA_DB_PATH}")
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB client: {str(e)}")
             raise
