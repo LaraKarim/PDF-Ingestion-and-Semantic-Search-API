@@ -1,6 +1,6 @@
 import logging
 from fastapi import FastAPI
-from app.routes import ingest, search  #
+from app.routes import ingest, search  
 
 # Configure logging
 logging.basicConfig(
