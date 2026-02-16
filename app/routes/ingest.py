@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException , Form 
+from fastapi import APIRouter, UploadFile, File, HTTPException , Form , Request
 from typing import List, Optional
 import os
 import logging
@@ -60,56 +60,64 @@ async def handle_file(name: str, file_obj):
     finally:
         semaphore.release()
 
-@router.post("/ingest")
-async def ingest(
-    # Instead of UploadFile, accept the input as a plain string
-    input: str = Form(...)
-):
+
+@router.post("/")
+async def ingest(request: Request):
     """
-    Accept one field 'input' (string).
-    It can be:
-      - a single PDF path
-      - multiple PDF paths separated by commas
-      - a directory path containing PDFs
+    Accept a single form field 'input' (multipart/form-data) that can be:
+      - one or more uploaded PDF files
+      - a path string to a single PDF
+      - a path string to a directory containing PDFs
+      - a comma‑separated list of paths
     """
 
+    form = await request.form()
     tasks = []
 
-    # Normalize input
-    input_value = input.strip()
+    uploaded_files = []
+    text_values = []
 
-    # Check if string contains multiple comma‑separated paths
-    paths = [p.strip() for p in input_value.split(",") if p.strip()]
+    # Collect all parts sent under 'input'
+    for field_name, value in form.multi_items():
+        if field_name == "input":
+            if hasattr(value, "filename") and value.filename:
+                uploaded_files.append(value)
+            elif isinstance(value, str) and value.strip():
+                text_values.append(value.strip())
 
-    # If only one path and it's a directory
-    if len(paths) == 1 and os.path.isdir(paths[0]):
-        dir_path = paths[0]
-        for name in os.listdir(dir_path):
-            if name.lower().endswith(".pdf"):
-                full = os.path.join(dir_path, name)
-                tasks.append(handle_file(name, open(full, "rb")))
+    # -------- Case A: file uploads --------
+    if uploaded_files:
+        for f in uploaded_files:
+            tasks.append(handle_file(f.filename, f.file))
 
-        if not tasks:
-            raise HTTPException(status_code=400, detail="No PDFs found in directory")
+    # -------- Case B: text input --------
+    elif text_values:
+        # Join in case of multiple text parts
+        combined = ", ".join(text_values)
+        paths = [p.strip() for p in combined.split(",") if p.strip()]
 
+        # If a single path and it's a directory
+        if len(paths) == 1 and os.path.isdir(paths[0]):
+            dir_path = paths[0]
+            for name in os.listdir(dir_path):
+                if name.lower().endswith(".pdf"):
+                    full_path = os.path.join(dir_path, name)
+                    tasks.append(handle_file(name, open(full_path, "rb")))
+
+        else:
+            # Each path is treated as file path
+            for path in paths:
+                # Just hand off to handle_file directly — it checks extension & readability
+                tasks.append(handle_file(os.path.basename(path), open(path, "rb")))
+
+    # -------- No valid input --------
     else:
-        # Treat each given path as a PDF path
-        for path in paths:
-            # Validate extension
-            if not path.lower().endswith(".pdf"):
-                raise HTTPException(status_code=400, detail=f"Not a PDF: {path}")
+        raise HTTPException(status_code=400, detail="No input provided")
 
-            if not os.path.exists(path):
-                raise HTTPException(status_code=400, detail=f"File not found: {path}")
-
-            # Open file and schedule processing
-            tasks.append(handle_file(os.path.basename(path), open(path, "rb")))
-
-    # If nothing to do
+    # -------- Run tasks --------
     if not tasks:
         raise HTTPException(status_code=400, detail="No valid PDF input provided")
 
-    # Run tasks concurrently
     results = await asyncio.gather(*tasks)
 
     processed_files = []
