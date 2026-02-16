@@ -2,21 +2,42 @@ import pdfplumber
 from fastapi import HTTPException
 from app.core.config import CHUNK_SIZE, CHUNK_OVERLAP
 import asyncio
+import re
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, chunk_overlap: int = CHUNK_OVERLAP):
     """
-    Simple text splitter that splits text into overlapping chunks.
+    Sentence-aware overlapping text chunks.
+    - chunk_size and chunk_overlap are in characters
     """
+    sentences = re.split(r'(?<=[.!?])\s+', text)
     chunks = []
-    start = 0
-    text_length = len(text)
+    current_chunk = ""
+    
+    for sentence in sentences:
+        if len(current_chunk) + len(sentence) + 1 <= chunk_size:
+            current_chunk += (sentence + " ")
+        else:
+            chunks.append(current_chunk.strip())
+            # start new chunk with overlap from previous chunk
+            overlap = current_chunk[-chunk_overlap:] if chunk_overlap < len(current_chunk) else current_chunk
+            current_chunk = overlap + sentence + " "
 
-    while start < text_length:
-        end = min(start + chunk_size, text_length)
-        chunks.append(text[start:end])
-        start += chunk_size - chunk_overlap if chunk_size > chunk_overlap else chunk_size
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
 
     return chunks
+
+def clean_pdf_text(text: str) -> str:
+    import re
+    # Join hyphenated line breaks: "random-\nness" → "randomness"
+    text = re.sub(r'-\n\s*', '', text)
+    # Replace newlines inside sentences with space
+    text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
+    # Fix camel-case concatenated words: "embeddingAlgorithms" → "embedding Algorithms"
+    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+    # Remove multiple spaces
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
 
 
 def _process_pdf_sync(file_obj):
@@ -49,6 +70,8 @@ def _process_pdf_sync(file_obj):
         if not all_text.strip():
             raise HTTPException(status_code=400, detail="PDF contains no readable text.")
         
+        #Clean pdf for better search query
+        all_text = clean_pdf_text(all_text)
         chunks = chunk_text(all_text)
         
         if not chunks:
